@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1e40af; /* Blue 800 */
+  --color-secondary: #059669; /* Emerald 600 */
+  --color-accent: #3b82f6; /* Blue 500 */
+  --color-medical-bg: #f8fafc; /* Slate 50 */
+  --color-medical-text: #1e293b; /* Slate 800 */
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-medical-bg text-medical-text font-sans;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-6 py-2 rounded-full font-semibold transition-all hover:bg-blue-900 active:scale-95 shadow-md;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary text-white px-6 py-2 rounded-full font-semibold transition-all hover:bg-emerald-700 active:scale-95 shadow-md;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-lg;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e40af;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1e3a8a;
+}

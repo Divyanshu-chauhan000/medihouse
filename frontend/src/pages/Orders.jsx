@@ -79,7 +79,7 @@ const Orders = () => {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Amount</p>
-                      <p className="text-xl font-black text-primary">${order.totalPrice}</p>
+                      <p className="text-xl font-black text-primary">₹{order.totalPrice}</p>
                     </div>
                     <div>
                       <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border ${getStatusBg(order.status)}`}>
@@ -100,7 +100,7 @@ const Orders = () => {
                           <p className="text-sm text-slate-400">Quantity: {item.quantity}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-slate-900">${item.price * item.quantity}</p>
+                          <p className="font-bold text-slate-900">₹{item.price * item.quantity}</p>
                         </div>
                       </div>
                     ))}

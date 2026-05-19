@@ -21,6 +21,13 @@ const ProductDetails = () => {
     dispatch(addToCart({ productId: product._id, quantity }));
   };
 
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return 'https://via.placeholder.com/600x600?text=Medicine';
+    if (imagePath.startsWith('http')) return imagePath;
+    const base = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    return `${base}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+  };
+
   if (loading) return <div className="container mx-auto px-4 py-20 text-center">Loading product...</div>;
   if (error) return <div className="container mx-auto px-4 py-20 text-center text-red-500">{error}</div>;
   if (!product) return null;
@@ -45,7 +52,7 @@ const ProductDetails = () => {
                 <motion.img 
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  src={product.image || 'https://via.placeholder.com/600x600?text=Medicine'} 
+                  src={getImageUrl(product.image)} 
                   alt={product.name}
                   className="max-h-full object-contain"
                 />
@@ -53,7 +60,7 @@ const ProductDetails = () => {
               <div className="grid grid-cols-4 gap-4">
                  {[...Array(4)].map((_, i) => (
                    <div key={i} className="aspect-square bg-slate-50 rounded-2xl border border-slate-100 p-2 cursor-pointer hover:border-primary transition-all">
-                     <img src={product.image || 'https://via.placeholder.com/150x150?text=Alt'} className="w-full h-full object-contain" />
+                     <img src={getImageUrl(product.image)} className="w-full h-full object-contain" />
                    </div>
                  ))}
               </div>
@@ -77,9 +84,9 @@ const ProductDetails = () => {
               </div>
 
               <div className="flex items-end gap-4">
-                <span className="text-5xl font-black text-slate-900">${product.price}</span>
+                <span className="text-5xl font-black text-slate-900">₹{product.price}</span>
                 {product.mrp && (
-                  <span className="text-xl text-slate-400 line-through mb-1">${product.mrp}</span>
+                  <span className="text-xl text-slate-400 line-through mb-1">₹{product.mrp}</span>
                 )}
                 <span className="text-secondary font-bold mb-1">Save 15%</span>
               </div>

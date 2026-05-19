@@ -40,6 +40,13 @@ const Cart = () => {
     }
   };
 
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return 'https://via.placeholder.com/150';
+    if (imagePath.startsWith('http')) return imagePath;
+    const base = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    return `${base}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+  };
+
   if (!user) {
     return (
       <div className="container mx-auto px-4 py-20 text-center">
@@ -78,7 +85,7 @@ const Cart = () => {
                   className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-6 items-center"
                 >
                   <div className="w-32 h-32 bg-slate-50 rounded-2xl p-4 flex items-center justify-center shrink-0">
-                    <img src={item.product.image || 'https://via.placeholder.com/150'} alt={item.product.name} className="max-h-full object-contain" />
+                    <img src={getImageUrl(item.product.image)} alt={item.product.name} className="max-h-full object-contain" />
                   </div>
                   
                   <div className="flex-1 text-center md:text-left">
@@ -95,7 +102,7 @@ const Cart = () => {
                         <span className="w-10 text-center font-bold">{item.quantity}</span>
                         <button onClick={() => handleQtyChange(item.product._id, item.quantity + 1)} className="w-8 h-8 font-bold text-lg">+</button>
                       </div>
-                      <span className="text-2xl font-black text-slate-900">${item.product.price * item.quantity}</span>
+                      <span className="text-2xl font-black text-slate-900">₹{item.product.price * item.quantity}</span>
                     </div>
                   </div>
 
@@ -121,20 +128,20 @@ const Cart = () => {
                 <div className="space-y-4 mb-8">
                   <div className="flex justify-between text-slate-500">
                     <span>Subtotal</span>
-                    <span className="font-bold text-slate-900">${subtotal}</span>
+                    <span className="font-bold text-slate-900">₹{subtotal}</span>
                   </div>
                   <div className="flex justify-between text-slate-500">
                     <span>Shipping</span>
-                    <span className="font-bold text-slate-900">{shipping === 0 ? 'FREE' : `$${shipping}`}</span>
+                    <span className="font-bold text-slate-900">{shipping === 0 ? 'FREE' : `₹${shipping}`}</span>
                   </div>
                   {shipping > 0 && (
                     <p className="text-[10px] text-slate-400 bg-slate-50 p-2 rounded-lg">
-                      Add ${500 - subtotal} more for free shipping
+                      Add ₹{500 - subtotal} more for free shipping
                     </p>
                   )}
                   <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
                     <span className="text-xl font-bold text-slate-900">Total</span>
-                    <span className="text-3xl font-black text-primary">${total}</span>
+                    <span className="text-3xl font-black text-primary">₹{total}</span>
                   </div>
                 </div>
 

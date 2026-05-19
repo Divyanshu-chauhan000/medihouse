@@ -143,7 +143,7 @@ const Home = () => {
             <div>
               <h2 className="text-4xl md:text-5xl font-black mb-6 leading-tight">Need medicines that require prescription?</h2>
               <p className="text-blue-100 text-lg mb-10">Upload your doctor's prescription and we'll take care of the rest. Simple, fast and verified.</p>
-              <Link to="/prescriptions" className="bg-white text-primary hover:bg-blue-50 py-4 px-10 text-lg font-bold rounded-full transition-all inline-block shadow-lg">
+              <Link to="/prescriptions/upload" className="bg-white text-primary hover:bg-blue-50 py-4 px-10 text-lg font-bold rounded-full transition-all inline-block shadow-lg">
                 Upload Now
               </Link>
             </div>

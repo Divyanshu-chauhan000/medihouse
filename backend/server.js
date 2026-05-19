@@ -1,6 +1,8 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import connectDB from './config/database.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,9 +20,7 @@ import cartRoutes from './routes/cart.js';
 import orderRoutes from './routes/orders.js';
 import prescriptionRoutes from './routes/prescriptions.js';
 import wishlistRoutes from './routes/wishlist.js';
-
-// Load environment variables
-dotenv.config();
+import razorpayWebhookHandler from './routes/razorpayWebhook.js';
 
 // Connect to MongoDB
 connectDB();
@@ -29,6 +29,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Razorpay webhooks require the raw body for signature verification (must be before express.json)
+app.post(
+  '/api/orders/razorpay/webhook',
+  express.raw({ type: 'application/json' }),
+  razorpayWebhookHandler
+);
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));

@@ -14,9 +14,9 @@ export const loadRazorpay = () => {
 
 export const razorpayOptions = (order, user, callback) => {
   return {
-    key: import.meta.env.VITE_RAZORPAY_KEY || 'rzp_test_placeholder',
-    amount: order.totalAmount * 100, // in paise
-    currency: 'USD',
+    key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+    amount: order.totalAmount * 100,
+    currency: 'INR',
     name: 'MediHouse',
     description: 'Medical Purchase',
     order_id: order.razorpayOrderId,

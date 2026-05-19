@@ -17,7 +17,7 @@ const Checkout = () => {
     city: '',
     state: '',
     zipCode: '',
-    country: 'USA'
+    country: 'India',
   });
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [loading, setLoading] = useState(false);
@@ -33,6 +33,10 @@ const Checkout = () => {
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => resolve(true);
@@ -41,107 +45,134 @@ const Checkout = () => {
     });
   };
 
-  const placeOrderDB = async (paymentId = null) => {
-    try {
-      const orderData = {
-        orderItems: items.map(item => ({
-          product: item.product._id,
-          name: item.product.name,
-          quantity: item.quantity,
-          price: item.product.price,
-          image: item.product.image
-        })),
-        shippingAddress,
-        paymentMethod,
-        totalPrice: total,
-        isPaid: paymentMethod === 'card',
-        paidAt: paymentMethod === 'card' ? new Date() : undefined
-      };
+  const buildOrderPayload = () => ({
+    orderItems: items.map((item) => ({
+      product: item.product._id,
+      quantity: item.quantity,
+      price: item.product.price,
+      requiresPrescription: item.requiresPrescription,
+      prescriptionId: item.prescriptionId,
+    })),
+    shippingAddress,
+    paymentMethod,
+    shippingCost: shipping,
+    discount: 0,
+  });
 
-      await API.post('/orders', orderData);
-      setSuccess(true);
-      dispatch(clearCartLocal());
-      setTimeout(() => navigate('/orders'), 3000);
-    } catch (error) {
-      console.error('Order creation failed:', error);
-      alert('Order failed. Please try again.');
-      setLoading(false);
-    }
+  const placeCodOrder = async () => {
+    await API.post('/orders/create', {
+      ...buildOrderPayload(),
+      paymentMethod: 'cod',
+    });
+    setSuccess(true);
+    dispatch(clearCartLocal());
+    setTimeout(() => navigate('/orders'), 3000);
   };
 
-  const handlePayment = async () => {
-    const res = await loadRazorpayScript();
-    if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
+  const handleRazorpayPayment = async () => {
+    const scriptOk = await loadRazorpayScript();
+    if (!scriptOk) {
+      alert('Razorpay checkout failed to load. Check your connection.');
       setLoading(false);
       return;
     }
 
-    try {
-      const result = await API.post('/orders/razorpay', { amount: total });
-      if (!result.data.success) {
-        alert('Server error. Are you online?');
-        setLoading(false);
-        return;
-      }
+    const createRes = await API.post('/orders/create', {
+      ...buildOrderPayload(),
+      paymentMethod: 'card',
+    });
 
-      const { amount, id: order_id, currency } = result.data.order;
-      const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'YOUR_KEY_ID', 
-        amount: amount.toString(),
-        currency: currency,
-        name: 'MediHouse',
-        description: 'Order Payment',
-        order_id: order_id,
-        handler: async function (response) {
-          try {
-            const verifyResult = await API.post('/orders/verify', {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
+    if (!createRes.data.success || !createRes.data.order?._id) {
+      alert(createRes.data.message || 'Could not create order');
+      setLoading(false);
+      return;
+    }
 
-            if (verifyResult.data.success) {
-               await placeOrderDB(response.razorpay_payment_id);
-            } else {
-               alert('Payment verification failed');
-               setLoading(false);
-            }
-          } catch (err) {
-            alert('Payment verification failed');
+    const mongoOrderId = createRes.data.order._id;
+
+    const rpRes = await API.post('/orders/razorpay/create', {
+      orderId: mongoOrderId,
+    });
+
+    if (!rpRes.data.success || !rpRes.data.razorpayOrder?.id) {
+      alert(rpRes.data.message || 'Could not start payment');
+      setLoading(false);
+      return;
+    }
+
+    const rzOrder = rpRes.data.razorpayOrder;
+    const keyId = rpRes.data.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+    if (!keyId) {
+      alert('Missing Razorpay key. Set VITE_RAZORPAY_KEY_ID in frontend .env');
+      setLoading(false);
+      return;
+    }
+
+    const options = {
+      key: keyId,
+      amount: rzOrder.amount,
+      currency: rzOrder.currency,
+      order_id: rzOrder.id,
+      name: 'MediHouse',
+      description: 'Order payment',
+      handler: async function (response) {
+        try {
+          const verifyResult = await API.post('/orders/razorpay/verify', {
+            orderId: mongoOrderId,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            paymentMethod: 'card',
+          });
+
+          if (verifyResult.data.success) {
+            setSuccess(true);
+            dispatch(clearCartLocal());
+            setLoading(false);
+            setTimeout(() => navigate('/orders'), 2500);
+          } else {
+            alert(verifyResult.data.message || 'Payment verification failed');
             setLoading(false);
           }
-        },
-        prefill: {
-          name: user?.name || 'Customer',
-          email: user?.email || 'customer@example.com',
-        },
-        theme: {
-          color: '#3b82f6', 
-        },
-      };
+        } catch (err) {
+          console.error(err);
+          alert(err.response?.data?.message || 'Payment verification failed');
+          setLoading(false);
+        }
+      },
+      prefill: {
+        name: user?.name || 'Customer',
+        email: user?.email || '',
+        contact: user?.phone || '',
+      },
+      theme: { color: '#3b82f6' },
+      modal: {
+        ondismiss: () => setLoading(false),
+      },
+    };
 
-      const paymentObject = new window.Razorpay(options);
-      paymentObject.open();
-      paymentObject.on('payment.failed', function (response) {
-        alert(response.error.description);
-        setLoading(false);
-      });
-    } catch (error) {
-       console.error(error);
-       setLoading(false);
-       alert('Something went wrong');
-    }
+    const paymentObject = new window.Razorpay(options);
+    paymentObject.on('payment.failed', function (response) {
+      alert(response.error?.description || 'Payment failed');
+      setLoading(false);
+    });
+    paymentObject.open();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
-    if (paymentMethod === 'card') {
-      await handlePayment();
-    } else {
-      await placeOrderDB();
+
+    try {
+      if (paymentMethod === 'card') {
+        await handleRazorpayPayment();
+      } else {
+        await placeCodOrder();
+      }
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || 'Something went wrong');
+      setLoading(false);
     }
   };
 
@@ -149,7 +180,9 @@ const Checkout = () => {
     return (
       <div className="container mx-auto px-4 py-20 text-center">
         <h2 className="text-2xl font-bold mb-4">Your cart is empty</h2>
-        <button onClick={() => navigate('/medicines')} className="btn-primary">Shop Now</button>
+        <button type="button" onClick={() => navigate('/medicines')} className="btn-primary">
+          Shop Now
+        </button>
       </div>
     );
   }
@@ -157,7 +190,7 @@ const Checkout = () => {
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <motion.div 
+        <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="bg-white p-16 rounded-[4rem] shadow-2xl text-center max-w-lg mx-4"
@@ -166,8 +199,10 @@ const Checkout = () => {
             <HiOutlineCheckCircle size={60} />
           </div>
           <h1 className="text-4xl font-black text-slate-900 mb-4">Order Confirmed!</h1>
-          <p className="text-slate-500 text-lg mb-10">Thank you for choosing MediHouse. We've received your order and will notify you once it's shipped.</p>
-          <button onClick={() => navigate('/orders')} className="btn-primary w-full py-4 text-lg">
+          <p className="text-slate-500 text-lg mb-10">
+            Thank you for choosing MediHouse. We have received your order and will notify you once it is shipped.
+          </p>
+          <button type="button" onClick={() => navigate('/orders')} className="btn-primary w-full py-4 text-lg">
             View My Orders
           </button>
         </motion.div>
@@ -179,68 +214,71 @@ const Checkout = () => {
     <div className="bg-slate-50 min-h-screen py-12">
       <div className="container mx-auto px-4">
         <h1 className="text-4xl font-black text-slate-900 mb-12">Checkout</h1>
-        
+
         <form onSubmit={handleSubmit} className="grid lg:grid-cols-3 gap-12">
-          {/* Left - Shipping & Payment */}
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
               <h3 className="text-2xl font-bold mb-8 flex items-center gap-3">
-                <span className="w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center text-sm">1</span>
+                <span className="w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center text-sm">
+                  1
+                </span>
                 Shipping Address
               </h3>
-              
+
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-sm font-bold text-slate-700">Street Address</label>
-                  <input 
-                    name="street" 
-                    required 
+                  <input
+                    name="street"
+                    required
                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-primary/20"
-                    placeholder="123 Health Ave"
+                    placeholder="Street, area"
                     value={shippingAddress.street}
                     onChange={handleInputChange}
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">City</label>
-                  <input 
-                    name="city" 
-                    required 
+                  <input
+                    name="city"
+                    required
                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-primary/20"
-                    placeholder="New York"
+                    placeholder="City"
                     value={shippingAddress.city}
                     onChange={handleInputChange}
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">State</label>
-                  <input 
-                    name="state" 
-                    required 
+                  <input
+                    name="state"
+                    required
                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-primary/20"
-                    placeholder="NY"
+                    placeholder="State"
                     value={shippingAddress.state}
                     onChange={handleInputChange}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Zip Code</label>
-                  <input 
-                    name="zipCode" 
-                    required 
+                  <label className="text-sm font-bold text-slate-700">PIN code</label>
+                  <input
+                    name="zipCode"
+                    required
+                    pattern="[0-9]{6}"
+                    title="6-digit PIN"
                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-primary/20"
-                    placeholder="10001"
+                    placeholder="400001"
                     value={shippingAddress.zipCode}
                     onChange={handleInputChange}
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Country</label>
-                  <input 
-                    name="country" 
-                    disabled 
+                  <input
+                    name="country"
+                    disabled
                     className="w-full bg-slate-100 border border-slate-100 rounded-2xl py-4 px-6 outline-none"
-                    value="USA"
+                    value="India"
                   />
                 </div>
               </div>
@@ -248,35 +286,45 @@ const Checkout = () => {
 
             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
               <h3 className="text-2xl font-bold mb-8 flex items-center gap-3">
-                <span className="w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center text-sm">2</span>
+                <span className="w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center text-sm">
+                  2
+                </span>
                 Payment Method
               </h3>
-              
+
               <div className="grid md:grid-cols-2 gap-4">
-                <label className={`flex items-center gap-4 p-6 rounded-3xl border-2 cursor-pointer transition-all ${
-                  paymentMethod === 'card' ? 'border-primary bg-blue-50 text-primary' : 'border-slate-100 hover:border-slate-200'
-                }`}>
-                  <input 
-                    type="radio" 
-                    className="hidden" 
-                    name="payment" 
+                <label
+                  className={`flex items-center gap-4 p-6 rounded-3xl border-2 cursor-pointer transition-all ${
+                    paymentMethod === 'card'
+                      ? 'border-primary bg-blue-50 text-primary'
+                      : 'border-slate-100 hover:border-slate-200'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    className="hidden"
+                    name="payment"
                     checked={paymentMethod === 'card'}
                     onChange={() => setPaymentMethod('card')}
                   />
                   <HiOutlineCreditCard size={32} />
                   <div>
-                    <p className="font-bold">Credit/Debit Card</p>
-                    <p className="text-xs opacity-60">Visa, Mastercard, Amex</p>
+                    <p className="font-bold">UPI / Card / Netbanking</p>
+                    <p className="text-xs opacity-60">Secured by Razorpay (INR)</p>
                   </div>
                 </label>
-                
-                <label className={`flex items-center gap-4 p-6 rounded-3xl border-2 cursor-pointer transition-all ${
-                  paymentMethod === 'cod' ? 'border-primary bg-blue-50 text-primary' : 'border-slate-100 hover:border-slate-200'
-                }`}>
-                  <input 
-                    type="radio" 
-                    className="hidden" 
-                    name="payment" 
+
+                <label
+                  className={`flex items-center gap-4 p-6 rounded-3xl border-2 cursor-pointer transition-all ${
+                    paymentMethod === 'cod'
+                      ? 'border-primary bg-blue-50 text-primary'
+                      : 'border-slate-100 hover:border-slate-200'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    className="hidden"
+                    name="payment"
                     checked={paymentMethod === 'cod'}
                     onChange={() => setPaymentMethod('cod')}
                   />
@@ -290,45 +338,46 @@ const Checkout = () => {
             </div>
           </div>
 
-          {/* Right - Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl sticky top-28">
               <h3 className="text-2xl font-bold text-slate-900 mb-8">Final Review</h3>
-              
+
               <div className="space-y-4 mb-8">
-                {items.map(item => (
+                {items.map((item) => (
                   <div key={item.product._id} className="flex justify-between text-sm">
-                    <span className="text-slate-500">{item.product.name} x {item.quantity}</span>
-                    <span className="font-bold">${item.product.price * item.quantity}</span>
+                    <span className="text-slate-500">
+                      {item.product.name} × {item.quantity}
+                    </span>
+                    <span className="font-bold">₹{item.product.price * item.quantity}</span>
                   </div>
                 ))}
-                
+
                 <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
                   <div className="flex justify-between text-slate-500">
                     <span>Subtotal</span>
-                    <span className="font-bold text-slate-900">${subtotal}</span>
+                    <span className="font-bold text-slate-900">₹{subtotal}</span>
                   </div>
                   <div className="flex justify-between text-slate-500">
                     <span>Shipping</span>
-                    <span className="font-bold text-slate-900">${shipping}</span>
+                    <span className="font-bold text-slate-900">₹{shipping}</span>
                   </div>
                   <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
                     <span className="text-xl font-bold text-slate-900">Total</span>
-                    <span className="text-3xl font-black text-primary">${total}</span>
+                    <span className="text-3xl font-black text-primary">₹{total}</span>
                   </div>
                 </div>
               </div>
 
-              <button 
+              <button
                 type="submit"
                 disabled={loading}
                 className="w-full btn-primary py-5 text-xl shadow-blue-200 shadow-2xl disabled:opacity-50"
               >
-                {loading ? 'Processing...' : (paymentMethod === 'card' ? 'Pay Now' : 'Place Order')}
+                {loading ? 'Processing...' : paymentMethod === 'card' ? 'Pay with Razorpay' : 'Place Order'}
               </button>
-              
+
               <p className="text-center text-xs text-slate-400 mt-6 px-4 leading-relaxed">
-                By placing this order, you agree to MediHouse's Terms of Service and Privacy Policy.
+                By placing this order, you agree to MediHouse&apos;s Terms of Service and Privacy Policy.
               </p>
             </div>
           </div>

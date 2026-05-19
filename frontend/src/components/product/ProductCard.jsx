@@ -20,6 +20,13 @@ const ProductCard = ({ product }) => {
     dispatch(toggleWishlist(product._id));
   };
 
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return 'https://placehold.co/400x400/EEE/31343C?text=Medicine';
+    if (imagePath.startsWith('http')) return imagePath;
+    const base = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    return `${base}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+  };
+
   return (
     <motion.div 
       whileHover={{ y: -5 }}
@@ -27,7 +34,7 @@ const ProductCard = ({ product }) => {
     >
       <Link to={`/product/${product._id}`} className="block relative aspect-square overflow-hidden bg-slate-50">
         <img 
-          src={product.image || 'https://placehold.co/400x400/EEE/31343C?text=Medicine'} 
+          src={getImageUrl(product.image)} 
           alt={product.name}
           onError={(e) => { e.target.src = 'https://placehold.co/400x400/EEE/31343C?text=Medicine'; e.target.onerror = null; }}
           className="w-full h-full object-contain p-6 transition-transform duration-500 group-hover:scale-110"
@@ -70,9 +77,9 @@ const ProductCard = ({ product }) => {
         
         <div className="flex items-center justify-between mt-4">
           <div>
-            <span className="text-2xl font-black text-slate-900">${product.price}</span>
+            <span className="text-2xl font-black text-slate-900">₹{product.price}</span>
             {product.mrp && (
-              <span className="ml-2 text-sm text-slate-400 line-through">${product.mrp}</span>
+              <span className="ml-2 text-sm text-slate-400 line-through">₹{product.mrp}</span>
             )}
           </div>
           

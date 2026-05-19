@@ -19,7 +19,7 @@ const Navbar = () => {
   const { items: cartItems } = useSelector((state) => state.cart);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
+  const userName = user?.name || 'User';
   const handleLogout = () => {
     dispatch(logout());
     navigate('/');
@@ -81,7 +81,7 @@ const Navbar = () => {
                   <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary">
                     <HiOutlineUser />
                   </div>
-                  <span>{user.name.split(' ')[0]}</span>
+                  <span>{userName.split(' ')[0]}</span>
                 </button>
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                   <Link to="/orders" className="block px-4 py-2 hover:bg-slate-50">My Orders</Link>
